@@ -3,6 +3,7 @@ package store
 import (
 	"math"
 	"sync"
+	"time"
 )
 
 /* Basically we are trying to architecture the design of the app according to different parts, in this
@@ -62,6 +63,25 @@ func (s *TelemetryStore) Stats() map[string]Stats {
 			Max:   max,
 			Avg:   sum / float64(count),
 		}
+	}
+	return result
+}
+
+/*Measures events per second /metrics/rate*/
+
+func (s *TelemetryStore) Rate(windowsSeconds int64) map[string]float64 {
+	now := time.Now().Unix()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make(map[string]float64)
+	for name, points := range s.buffer {
+		var count int
+		for _, p := range points {
+			if now-p.Timestamp <= windowsSeconds {
+				count++
+			}
+		}
+		result[name] = float64(count) / float64(windowsSeconds)
 	}
 	return result
 }
