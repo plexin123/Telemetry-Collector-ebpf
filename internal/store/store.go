@@ -1,6 +1,7 @@
 package store
 
 import (
+	"log"
 	"math"
 	"sync"
 	"time"
@@ -84,4 +85,25 @@ func (s *TelemetryStore) Rate(windowsSeconds int64) map[string]float64 {
 		result[name] = float64(count) / float64(windowsSeconds)
 	}
 	return result
+}
+
+func (s *TelemetryStore) StartFlushing(ttl time.Duration, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	go func() {
+		for range ticker.C {
+			s.mu.Lock()
+			now := time.Now().Unix()
+			for name, points := range s.buffer {
+				var filtered []MetricPoint
+				for _, p := range points {
+					if now-p.Timestamp <= int64(ttl.Seconds()) {
+						filtered = append(filtered, p)
+					}
+				}
+				s.buffer[name] = filtered
+			}
+			s.mu.Unlock()
+			log.Println("[TTL] Expired old metric points")
+		}
+	}()
 }
