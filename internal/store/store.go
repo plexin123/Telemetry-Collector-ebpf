@@ -24,9 +24,18 @@ type Stats struct {
 	Avg   float64 `json:"avg"`
 }
 
+type ExecPoint struct {
+	Name      string `json:"name"`
+	TimeStamp int64  `json:"timestamp"`
+	PID       uint32 `json:"pid"`
+	UID       uint32 `json:"uid"`
+}
+
 type TelemetryStore struct {
 	mu     sync.RWMutex
 	buffer map[string][]MetricPoint
+	execMu sync.Mutex
+	execs  []ExecPoint
 }
 
 /* Basically we need to create a func to initialize a TelemetryStore" */
@@ -104,6 +113,38 @@ func (s *TelemetryStore) StartFlushing(ttl time.Duration, interval time.Duration
 			}
 			s.mu.Unlock()
 			log.Println("[TTL] Expired old metric points")
+		}
+	}()
+}
+
+func (s *TelemetryStore) AddExec(e ExecPoint) {
+	s.execMu.Lock()
+	defer s.execMu.Unlock()
+	s.execs = append(s.execs, e)
+}
+
+func (s *TelemetryStore) GetExecEvents() []ExecPoint {
+	s.execMu.Lock()
+	defer s.execMu.Unlock()
+	events := make([]ExecPoint, len(s.execs))
+	copy(events, s.execs)
+	return events
+}
+
+func (s *TelemetryStore) StartExecTTL(ttl time.Duration, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	go func() {
+		for range ticker.C {
+			now := time.Now().Unix()
+			s.execMu.Lock()
+			var fresh []ExecPoint
+			for _, e := range s.execs {
+				if now-e.TimeStamp <= int64(ttl.Seconds()) {
+					fresh = append(fresh, e)
+				}
+			}
+			s.execs = fresh
+			s.execMu.Unlock()
 		}
 	}()
 }

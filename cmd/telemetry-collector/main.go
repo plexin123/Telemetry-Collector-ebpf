@@ -14,6 +14,9 @@ func main() {
 	http.HandleFunc("/metrics/stats", handler.StatsHandler(s))
 	http.HandleFunc("/health", handler.HealthHandler)
 	http.HandleFunc("/metrics/rate", handler.RateHandler(s))
+	http.HandleFunc("/events", handler.EventHandler(s))
+	handler.AddMockExecEvents(s)
+	s.StartExecTTL(30*time.Second, 5*time.Second)
 	s.StartFlushing(30*time.Second, 5*time.Second)
 	log.Println("Server starting on :8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
